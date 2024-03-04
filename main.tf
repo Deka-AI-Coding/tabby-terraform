@@ -25,6 +25,11 @@ resource "docker_image" "nginx" {
   keep_locally = true
 }
 
+resource "docker_image" "tabby-worker-manager" {
+  name         = "tabby-worker-manager"
+  keep_locally = true
+}
+
 # Networks where all runners,workers will be
 resource "docker_network" "tabby_workers_net" {
   name = "tabby_workers_net"
@@ -39,7 +44,7 @@ resource "docker_container" "https-reverse-proxy" {
   name       = "https-reverse-proxy"
   image      = docker_image.nginx.image_id
   restart    = "always"
-  depends_on = [docker_container.tabby-web]
+  depends_on = [docker_container.tabby-web, docker_container.tabby-manager-api]
 
   networks_advanced {
     name = docker_network.tabby_front_net.name
@@ -245,6 +250,23 @@ resource "docker_container" "tabby-completion-gpu" {
 
   networks_advanced {
     name = docker_network.tabby_workers_net.name
+  }
+}
+
+resource "docker_container" "tabby-manager-api" {
+  name  = "tabby-manager-api"
+  image = docker_image.tabby-worker-manager.image_id
+  command = [
+    "--key",
+    "${var.tabby_worker_token}"
+  ]
+  volumes {
+    host_path      = "/var/run/docker.sock"
+    container_path = "/var/run/docker.sock"
+  }
+
+  networks_advanced {
+    name = docker_network.tabby_front_net.name
   }
 }
 

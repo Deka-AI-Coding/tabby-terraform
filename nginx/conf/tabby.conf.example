@@ -25,4 +25,8 @@ server {
     location / {
         proxy_pass http://tabby-web:8080/;
     }
+
+    location /manager/api {
+        proxy_pass http://tabby-manager-api:8080/;
+    }
 }
