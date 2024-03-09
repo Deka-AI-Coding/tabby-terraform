@@ -254,8 +254,9 @@ resource "docker_container" "tabby-completion-gpu" {
 }
 
 resource "docker_container" "tabby-manager-api" {
-  name  = "tabby-manager-api"
-  image = docker_image.tabby-worker-manager.image_id
+  name    = "tabby-manager-api"
+  restart = "always"
+  image   = docker_image.tabby-worker-manager.name
   command = [
     "--key",
     "${var.tabby_worker_token}"
