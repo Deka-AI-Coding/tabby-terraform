@@ -89,11 +89,11 @@ resource "docker_container" "certbot" {
 }
 
 resource "docker_container" "tabby-web" {
-  name  = "tabby-web"
-  image = docker_image.tabby.name
+  name       = "tabby-web"
+  image      = docker_image.tabby.name
+  entrypoint = ["tabby"]
   command = [
     "serve",
-    "--webserver",
     "--model", "${var.tabby_completion_model}",
     "--device", "${var.tabby_completion_device}",
     "--chat-model", "${var.tabby_chat_model}",
@@ -108,6 +108,7 @@ resource "docker_container" "tabby-web" {
     "TABBY_WEBSERVER_JWT_TOKEN_SECRET=${var.tabby_jwt_token}",
     "TABBY_DISABLE_USAGE_COLLECTION=1",
     "HSA_OVERRIDE_GFX_VERSION=10.3.0",
+    "TABBY_DOWNLOAD_HOST=registry.ollama.ai",
   ]
   networks_advanced {
     name = docker_network.tabby_front_net.name
