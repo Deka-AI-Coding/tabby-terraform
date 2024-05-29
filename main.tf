@@ -15,18 +15,14 @@ resource "docker_image" "tabby" {
   keep_locally = true
 }
 
-resource "docker_image" "certbot" {
-  name         = "certbot/certbot:latest"
+
+resource "docker_image" "nginx-proxy" {
+  name         = var.nginx_proxy_docker_image
   keep_locally = true
 }
 
-resource "docker_image" "nginx" {
-  name         = "nginx:latest"
-  keep_locally = true
-}
-
-resource "docker_image" "tabby-worker-manager" {
-  name         = "tabby-worker-manager"
+resource "docker_image" "acme-companion" {
+  name         = "nginxproxy/acme-companion"
   keep_locally = true
 }
 
@@ -34,8 +30,6 @@ resource "docker_image" "ollama" {
   name         = var.ollama_docker_image
   keep_locally = true
 }
-
-
 
 # Network connecting main https proxy with tabby
 resource "docker_network" "tabby_front_net" {
@@ -47,29 +41,29 @@ resource "docker_network" "tabby_back_net" {
   name = "tabby_back_net"
 }
 
+resource "docker_volume" "certs" {
+  name = "certs"
+}
+
+resource "docker_volume" "vhost" {
+  name = "vhost"
+}
+
+resource "docker_volume" "html" {
+  name = "html"
+}
+
+resource "docker_volume" "acme" {
+  name = "acme"
+}
+
 resource "docker_container" "https-reverse-proxy" {
-  name       = "https-reverse-proxy"
-  image      = docker_image.nginx.image_id
-  restart    = "always"
-  depends_on = [docker_container.tabby-web, docker_container.tabby-manager-api]
+  name    = "https-reverse-proxy"
+  image   = docker_image.nginx-proxy.name
+  restart = "always"
 
   networks_advanced {
     name = docker_network.tabby_front_net.name
-  }
-
-  volumes {
-    host_path      = abspath("${path.root}/nginx/conf")
-    container_path = "/etc/nginx/conf.d"
-  }
-
-  volumes {
-    host_path      = abspath("${path.root}/certbot/www")
-    container_path = "/var/www/certbot"
-  }
-
-  volumes {
-    host_path      = abspath("${path.root}/certbot/conf")
-    container_path = "/etc/letsencrypt"
   }
 
   ports {
@@ -81,20 +75,52 @@ resource "docker_container" "https-reverse-proxy" {
     internal = 443
     external = 443
   }
-}
-
-resource "docker_container" "certbot" {
-  name  = "certbot"
-  image = docker_image.certbot.image_id
 
   volumes {
-    host_path      = abspath("${path.root}/certbot/www")
-    container_path = "/var/www/certbot"
+    host_path      = "/var/run/docker.sock"
+    container_path = "/tmp/docker.sock"
+    read_only      = true
   }
 
   volumes {
-    host_path      = abspath("${path.root}/certbot/conf")
-    container_path = "/etc/letsencrypt"
+    volume_name    = docker_volume.certs.name
+    container_path = "/etc/nginx/certs"
+  }
+
+  volumes {
+    volume_name    = docker_volume.vhost.name
+    container_path = "/etc/nginx/vhost.d"
+  }
+
+  volumes {
+    volume_name    = docker_volume.html.name
+    container_path = "/usr/share/nginx/html"
+  }
+
+}
+
+resource "docker_container" "acme-companion" {
+  name       = "nginx-proxy-acme"
+  image      = docker_image.acme-companion.name
+  depends_on = [docker_container.https-reverse-proxy]
+
+  env = [
+    "DEFAULT_EMAIL=${var.your_email}"
+  ]
+
+  volumes {
+    from_container = docker_container.https-reverse-proxy.name
+  }
+
+  volumes {
+    host_path      = "/var/run/docker.sock"
+    container_path = "/var/run/docker.sock"
+    read_only      = true
+  }
+
+  volumes {
+    volume_name    = docker_volume.acme.name
+    container_path = "/etc/acme.sh"
   }
 }
 
@@ -114,7 +140,10 @@ resource "docker_container" "tabby-web" {
   env = [
     "HSA_OVERRIDE_GFX_VERSION=10.3.0",
     "TABBY_OLLAMA_ALLOW_PULL=y",
-    "RUST_LOG=ollama_api_bindings=info"
+    "RUST_LOG=ollama_api_bindings=info",
+    "VIRTUAL_HOST=tabby.${var.your_domain}",
+    "LETSENCRYPT_HOST=tabby.${var.your_domain}",
+    "VIRTUAL_PORT=8080"
   ]
   networks_advanced {
     name = docker_network.tabby_front_net.name
@@ -124,24 +153,6 @@ resource "docker_container" "tabby-web" {
     name = docker_network.tabby_back_net.name
   }
 
-}
-
-resource "docker_container" "tabby-manager-api" {
-  name    = "tabby-manager-api"
-  restart = "always"
-  image   = docker_image.tabby-worker-manager.name
-  command = [
-    "--key",
-    "${var.tabby_worker_token}"
-  ]
-  volumes {
-    host_path      = "/var/run/docker.sock"
-    container_path = "/var/run/docker.sock"
-  }
-
-  networks_advanced {
-    name = docker_network.tabby_front_net.name
-  }
 }
 
 resource "docker_container" "ollama" {
