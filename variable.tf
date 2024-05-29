@@ -3,6 +3,11 @@ variable "tabby_docker_image" {
   default = "tabbyml/tabby"
 }
 
+variable "ollama_docker_image" {
+  type    = string
+  default = "ollama/ollama"
+}
+
 variable "tabby_jwt_token" {
   type        = string
   description = "JWT token for tabby web interface (UUID format)"

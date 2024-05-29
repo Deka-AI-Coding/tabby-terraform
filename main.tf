@@ -30,11 +30,21 @@ resource "docker_image" "tabby-worker-manager" {
   keep_locally = true
 }
 
+resource "docker_image" "ollama" {
+  name         = var.ollama_docker_image
+  keep_locally = true
+}
+
 
 
 # Network connecting main https proxy with tabby
 resource "docker_network" "tabby_front_net" {
   name = "tabby_front_net"
+}
+
+# Network for Tabby services: workers, http-api providers, etc
+resource "docker_network" "tabby_back_net" {
+  name = "tabby_back_net"
 }
 
 resource "docker_container" "https-reverse-proxy" {
@@ -93,33 +103,25 @@ resource "docker_container" "tabby-web" {
   image      = docker_image.tabby.name
   entrypoint = ["tabby"]
   command = [
-    "serve",
-    "--model", "${var.tabby_completion_model}",
-    "--device", "${var.tabby_completion_device}",
-    "--chat-model", "${var.tabby_chat_model}",
-    "--chat-device", "${var.tabby_chat_device}"
+    "serve"
   ]
-  restart = "always"
+  restart    = "always"
+  depends_on = [docker_container.ollama]
   volumes {
-    host_path      = pathexpand("~/.tabby")
+    host_path      = pathexpand("~/.tabby-ollama")
     container_path = "/data"
   }
   env = [
-    "TABBY_WEBSERVER_JWT_TOKEN_SECRET=${var.tabby_jwt_token}",
-    "TABBY_DISABLE_USAGE_COLLECTION=1",
     "HSA_OVERRIDE_GFX_VERSION=10.3.0",
-    "TABBY_DOWNLOAD_HOST=registry.ollama.ai",
+    "TABBY_OLLAMA_ALLOW_PULL=y",
+    "RUST_LOG=ollama_api_bindings=info"
   ]
   networks_advanced {
     name = docker_network.tabby_front_net.name
   }
 
-  devices {
-    host_path = "/dev/kfd"
-  }
-
-  devices {
-    host_path = "/dev/dri"
+  networks_advanced {
+    name = docker_network.tabby_back_net.name
   }
 
 }
@@ -142,4 +144,29 @@ resource "docker_container" "tabby-manager-api" {
   }
 }
 
+resource "docker_container" "ollama" {
+  name    = "ollama-tabby"
+  restart = "always"
+  image   = docker_image.ollama.name
 
+  env = [
+    "HSA_OVERRIDE_GFX_VERSION=10.3.0",
+  ]
+
+  volumes {
+    host_path      = pathexpand("~/.ollama")
+    container_path = "/root/.ollama"
+  }
+
+  networks_advanced {
+    name = docker_network.tabby_back_net.name
+  }
+
+  devices {
+    host_path = "/dev/kfd"
+  }
+
+  devices {
+    host_path = "/dev/dri"
+  }
+}
