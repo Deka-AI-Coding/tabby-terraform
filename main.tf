@@ -138,7 +138,7 @@ resource "docker_container" "tabby-web" {
     container_path = "/data"
   }
   env = [
-    "HSA_OVERRIDE_GFX_VERSION=10.3.0",
+    "TABBY_WEBSERVER_JWT_TOKEN_SECRET=${var.tabby_jwt_token}",
     "TABBY_OLLAMA_ALLOW_PULL=y",
     "RUST_LOG=ollama_api_bindings=info",
     "VIRTUAL_HOST=tabby.${var.your_domain}",
