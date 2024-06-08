@@ -31,6 +31,16 @@ resource "docker_image" "ollama" {
   keep_locally = true
 }
 
+resource "docker_image" "ollama-auth-provider" {
+  name         = "deka-sqlite-auth-request"
+  keep_locally = true
+}
+
+resource "docker_image" "nginx" {
+  name         = "nginx:latest"
+  keep_locally = true
+}
+
 # Network connecting main https proxy with tabby
 resource "docker_network" "tabby_front_net" {
   name = "tabby_front_net"
@@ -39,6 +49,11 @@ resource "docker_network" "tabby_front_net" {
 # Network for Tabby services: workers, http-api providers, etc
 resource "docker_network" "tabby_back_net" {
   name = "tabby_back_net"
+}
+
+# Network for authentication services
+resource "docker_network" "tabby_auth_net" {
+  name = "tabby_auth_net"
 }
 
 resource "docker_volume" "certs" {
@@ -179,5 +194,53 @@ resource "docker_container" "ollama" {
 
   devices {
     host_path = "/dev/dri"
+  }
+}
+
+resource "docker_container" "ollama-auth-provider" {
+  name    = "ollama-auth-provider"
+  restart = "always"
+  image   = docker_image.ollama-auth-provider.name
+
+  env = [
+    "DATABASE_LOCATION=/data/ee/db.sqlite"
+  ]
+  networks_advanced {
+    name = docker_network.tabby_auth_net.name
+  }
+
+  volumes {
+    host_path      = pathexpand("~/.tabby-ollama")
+    container_path = "/data"
+  }
+
+}
+
+resource "docker_container" "ollama-auth-proxy" {
+  name    = "ollama-auth-proxy"
+  restart = "always"
+  image   = docker_image.nginx.name
+
+  env = [
+    "VIRTUAL_HOST=ollama.${var.your_domain}",
+    "LETSENCRYPT_HOST=ollama.${var.your_domain}"
+  ]
+
+  volumes {
+    host_path      = abspath("${path.root}/nginx/ollama/")
+    container_path = "/etc/nginx/conf.d/"
+  }
+
+
+  networks_advanced {
+    name = docker_network.tabby_front_net.name
+  }
+
+  networks_advanced {
+    name = docker_network.tabby_auth_net.name
+  }
+
+  networks_advanced {
+    name = docker_network.tabby_back_net.name
   }
 }
