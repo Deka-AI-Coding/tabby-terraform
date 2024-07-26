@@ -177,6 +177,7 @@ resource "docker_container" "ollama" {
 
   env = [
     "HSA_OVERRIDE_GFX_VERSION=10.3.0",
+    "OLLAMA_DEBUG=0",
   ]
 
   volumes {
@@ -186,6 +187,11 @@ resource "docker_container" "ollama" {
 
   networks_advanced {
     name = docker_network.tabby_back_net.name
+  }
+
+  ports {
+    internal = 11434
+    external = 11434
   }
 
   devices {
