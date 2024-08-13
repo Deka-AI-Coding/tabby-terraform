@@ -8,6 +8,21 @@ variable "ollama_docker_image" {
   default = "ollama/ollama"
 }
 
+variable "flowise_docker_image" {
+  type    = string
+  default = "flowiseai/flowise:latest"
+}
+
+variable "flowise_user" {
+  type    = string
+  default = "flowise"
+}
+
+variable "flowise_password" {
+  type    = string
+  default = "Punktförmige Zugbeeinflussung"
+}
+
 variable "nginx_proxy_docker_image" {
   type    = string
   default = "nginxproxy/nginx-proxy:1.5"

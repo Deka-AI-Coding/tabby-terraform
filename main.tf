@@ -41,6 +41,11 @@ resource "docker_image" "nginx" {
   keep_locally = true
 }
 
+resource "docker_image" "flowise" {
+  name         = var.flowise_docker_image
+  keep_locally = true
+}
+
 # Network connecting main https proxy with tabby
 resource "docker_network" "tabby_front_net" {
   name = "tabby_front_net"
@@ -111,7 +116,11 @@ resource "docker_container" "https-reverse-proxy" {
     volume_name    = docker_volume.html.name
     container_path = "/usr/share/nginx/html"
   }
-
+  volumes {
+    host_path      = abspath("${path.root}/nginx/nginx-proxy/body_size.conf")
+    container_path = "/etc/nginx/conf.d/body_size.conf"
+    read_only      = true
+  }
 }
 
 resource "docker_container" "acme-companion" {
@@ -200,6 +209,39 @@ resource "docker_container" "ollama" {
 
   devices {
     host_path = "/dev/dri"
+  }
+}
+
+resource "docker_container" "flowise" {
+  name    = "flowise"
+  restart = "always"
+  image   = docker_image.flowise.name
+
+  env = [
+    "VIRTUAL_HOST=flowise.${var.your_domain}",
+    "LETSENCRYPT_HOST=flowise.${var.your_domain}",
+    "VIRTUAL_PORT=3000",
+    "FLOWISE_USERNAME=${var.flowise_user}",
+    "FLOWISE_PASSWORD=${var.flowise_password}",
+    "DATABASE_PATH=/root/.flowise"
+  ]
+
+  volumes {
+    host_path      = pathexpand("~/.flowise")
+    container_path = "/root/.flowise"
+  }
+
+  ports {
+    internal = 3003
+    external = 3003
+  }
+
+  networks_advanced {
+    name = docker_network.tabby_front_net.name
+  }
+
+  networks_advanced {
+    name = docker_network.tabby_back_net.name
   }
 }
 
