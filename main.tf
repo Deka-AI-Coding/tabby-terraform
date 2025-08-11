@@ -41,11 +41,6 @@ resource "docker_image" "nginx" {
   keep_locally = true
 }
 
-resource "docker_image" "flowise" {
-  name         = var.flowise_docker_image
-  keep_locally = true
-}
-
 # Network connecting main https proxy with tabby
 resource "docker_network" "tabby_front_net" {
   name = "tabby_front_net"
@@ -153,7 +148,9 @@ resource "docker_container" "tabby-web" {
   image      = docker_image.tabby.name
   entrypoint = ["tabby"]
   command = [
-    "serve"
+    "serve",
+    "--device",
+    "cpu"
   ]
   restart    = "always"
   depends_on = [docker_container.ollama]
@@ -164,10 +161,11 @@ resource "docker_container" "tabby-web" {
   env = [
     "TABBY_WEBSERVER_JWT_TOKEN_SECRET=${var.tabby_jwt_token}",
     "TABBY_OLLAMA_ALLOW_PULL=y",
-    "RUST_LOG=ollama_api_bindings=info",
+    "RUST_LOG=info",
     "VIRTUAL_HOST=tabby.${var.your_domain}",
     "LETSENCRYPT_HOST=tabby.${var.your_domain}",
-    "VIRTUAL_PORT=8080"
+    "VIRTUAL_PORT=8080",
+    "LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/compat:$LD_LIBRARY_PATH"
   ]
   networks_advanced {
     name = docker_network.tabby_front_net.name
@@ -185,8 +183,9 @@ resource "docker_container" "ollama" {
   image   = docker_image.ollama.name
 
   env = [
-    "HSA_OVERRIDE_GFX_VERSION=10.3.0",
     "OLLAMA_DEBUG=0",
+    "OLLAMA_MAX_LOADED_MODELS=1",
+    "OLLAMA_NUM_PARALLEL=1"
   ]
 
   volumes {
@@ -209,39 +208,6 @@ resource "docker_container" "ollama" {
 
   devices {
     host_path = "/dev/dri"
-  }
-}
-
-resource "docker_container" "flowise" {
-  name    = "flowise"
-  restart = "always"
-  image   = docker_image.flowise.name
-
-  env = [
-    "VIRTUAL_HOST=flowise.${var.your_domain}",
-    "LETSENCRYPT_HOST=flowise.${var.your_domain}",
-    "VIRTUAL_PORT=3000",
-    "FLOWISE_USERNAME=${var.flowise_user}",
-    "FLOWISE_PASSWORD=${var.flowise_password}",
-    "DATABASE_PATH=/root/.flowise"
-  ]
-
-  volumes {
-    host_path      = pathexpand("~/.flowise")
-    container_path = "/root/.flowise"
-  }
-
-  ports {
-    internal = 3003
-    external = 3003
-  }
-
-  networks_advanced {
-    name = docker_network.tabby_front_net.name
-  }
-
-  networks_advanced {
-    name = docker_network.tabby_back_net.name
   }
 }
 
